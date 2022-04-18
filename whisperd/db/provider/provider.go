@@ -1,11 +1,15 @@
 package provider
 
 import (
-	"fmt"
-	"strings"
+	"errors"
 
 	"whisperd.io/whisperd/whisperd/db"
+	"whisperd.io/whisperd/whisperd/db/pg"
 	"whisperd.io/whisperd/whisperd/db/sqlite"
+)
+
+var (
+	ErrorInvalidDriver = errors.New("invalid driver name")
 )
 
 const (
@@ -18,9 +22,8 @@ func New(opts db.Opts) (db.Provider, error) {
 	case SQLite:
 		return sqlite.NewProvider(opts)
 	case Postgres:
-		return nil, fmt.Errorf("postgres driver is not implemented yet")
+		return pg.NewProvider(opts)
 	default:
-		supported := strings.Join([]string{SQLite, Postgres}, ", ")
-		return nil, fmt.Errorf("invalid database driver %s, supported drivers are %s", opts.Driver, supported)
+		return nil, ErrorInvalidDriver
 	}
 }

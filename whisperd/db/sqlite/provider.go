@@ -8,17 +8,17 @@ import (
 )
 
 func NewProvider(opts db.Opts) (db.Provider, error) {
-	return &provider{opts}, nil
+	return &Provider{opts}, nil
 }
 
-type provider struct {
+type Provider struct {
 	opts db.Opts
 }
 
-func (p *provider) DB() (*sql.DB, error) {
+func (p *Provider) DB() (*sql.DB, error) {
 	return Init(p.opts.SQLiteFileName)
 }
 
-func (p *provider) Shouts(db *sql.DB) (store.Shouts, error) {
+func (p *Provider) Shouts(db *sql.DB) (store.Shouts, error) {
 	return NewShoutStore(db), nil
 }

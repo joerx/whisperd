@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"strconv"
 
 	"github.com/gorilla/mux"
 	"whisperd.io/whisperd/whisperd"
@@ -46,7 +47,13 @@ func (b *handler) getOne(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	id := vars["id"]
 
-	shout, err := b.shouts.Get(r.Context(), id)
+	ii, err := strconv.Atoi(id)
+	if err != nil {
+		respondError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	shout, err := b.shouts.Get(r.Context(), int64(ii))
 	switch err {
 	case nil:
 		respondJSON(w, http.StatusOK, shoutResponse{shout})

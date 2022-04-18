@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"regexp"
-	"strconv"
 	"testing"
 	"time"
 
@@ -24,25 +23,18 @@ type shoutStoreMock struct {
 
 // GetAll implements db.ShoutStore.GetAll for tests
 func (m *shoutStoreMock) GetAll(ctx context.Context) ([]whisperd.Shout, error) {
-	return nil, nil
+	return m.shouts, nil
 }
 
 // Get implements db.ShoutStore.Get for tests
-func (m *shoutStoreMock) Get(ctx context.Context, id string) (whisperd.Shout, error) {
-	tmp, err := strconv.ParseInt(id, 10, 0)
-	if err != nil {
-		return whisperd.Shout{}, fmt.Errorf("failed to parse id '%s' as integer", id)
+func (m *shoutStoreMock) Get(ctx context.Context, id int64) (whisperd.Shout, error) {
+	if id < 1 {
+		return whisperd.Shout{}, fmt.Errorf("invalid id '%d'", id)
 	}
-
-	i := tmp - 1
-
-	if i < 0 {
-		return whisperd.Shout{}, fmt.Errorf("invalid id '%s'", id)
-	}
-	if int(i) >= len(m.shouts) {
+	if int(id-1) > len(m.shouts) {
 		return whisperd.Shout{}, db.ErrorNotFound
 	}
-	return m.shouts[i], nil
+	return m.shouts[id-1], nil
 }
 
 // Put implements db.ShoutStore.Put for tests
@@ -58,11 +50,9 @@ func (m *shoutStoreMock) Delete(ctx context.Context, s whisperd.Shout) (whisperd
 	return s, nil
 }
 
-func testHandler() http.Handler {
+func testHandler(list []whisperd.Shout) http.Handler {
 	m := &shoutStoreMock{
-		shouts: []whisperd.Shout{
-			{ID: 1, Message: "Hello World", Timestamp: time.Now()},
-		},
+		shouts: list,
 	}
 
 	h := newHandler(m)
@@ -72,26 +62,29 @@ func testHandler() http.Handler {
 }
 
 func TestGetShout(t *testing.T) {
+	shouts := []whisperd.Shout{
+		{ID: 1, Message: "Moo!", Timestamp: time.Now()},
+	}
+	rt := testHandler(shouts)
+
 	type testCase struct {
 		url    string
 		sc     int
-		assert func(*httptest.ResponseRecorder)
+		assert func(*httptest.ResponseRecorder) error
 	}
 
 	testCases := []testCase{
 		{
 			url:    "/api/shout/1",
 			sc:     http.StatusOK,
-			assert: assertValidResponse(t, *regexp.MustCompile("Hello World")),
+			assert: assertValidResponse(*regexp.MustCompile(shouts[0].Message)),
 		},
 		{
 			url:    "/api/shout/20",
 			sc:     http.StatusNotFound,
-			assert: assertErrorResponse(t, *regexp.MustCompile("not found")),
+			assert: assertErrorResponse(*regexp.MustCompile("not found")),
 		},
 	}
-
-	rt := testHandler()
 
 	for _, tc := range testCases {
 		rec := httptest.NewRecorder()
@@ -99,9 +92,60 @@ func TestGetShout(t *testing.T) {
 
 		rt.ServeHTTP(rec, req)
 
-		assertStatus(t, rec, tc.sc)
-		assertContentType(t, rec, contentType)
-		tc.assert(rec)
+		if err := assertStatus(rec, tc.sc); err != nil {
+			t.Fatal(err)
+		}
+		if err := assertContentType(rec, contentType); err != nil {
+			t.Fatal(err)
+		}
+		if err := tc.assert(rec); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+func TestListShouts(t *testing.T) {
+	type test struct {
+		shouts []whisperd.Shout
+		status int
+	}
+
+	tests := []test{
+		{
+			status: http.StatusOK,
+			shouts: []whisperd.Shout{
+				{ID: 1, Message: "Halloballo", Timestamp: time.Now()},
+				{ID: 2, Message: "Elon is an ugly cow!", Timestamp: time.Now()},
+			},
+		},
+		{
+			status: http.StatusOK,
+			shouts: []whisperd.Shout{},
+		},
+	}
+
+	for _, tc := range tests {
+		rt := testHandler(tc.shouts)
+
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/api/shouts", nil)
+
+		rt.ServeHTTP(rec, req)
+
+		var rl shoutListResponse
+		if err := json.Unmarshal(rec.Body.Bytes(), &rl); err != nil {
+			t.Fatal(err)
+		}
+
+		if err := assertStatus(rec, tc.status); err != nil {
+			t.Fatal(err)
+		}
+		if err := assertContentType(rec, contentType); err != nil {
+			t.Fatal(err)
+		}
+		if len(rl.Shouts) != len(tc.shouts) {
+			t.Fatalf("expected %d shouts to be returned but got %d", len(tc.shouts), len(rl.Shouts))
+		}
 	}
 }
 
@@ -109,23 +153,23 @@ func TestPostShout(t *testing.T) {
 	type testCase struct {
 		input  putShoutRequest
 		status int
-		assert func(*httptest.ResponseRecorder)
+		assert func(*httptest.ResponseRecorder) error
 	}
 
 	tests := []testCase{
 		{
 			input:  putShoutRequest{Shout: whisperd.Shout{Message: "sshhh!"}},
 			status: http.StatusOK,
-			assert: assertValidResponse(t, *regexp.MustCompile("sshhh!")),
+			assert: assertValidResponse(*regexp.MustCompile("sshhh!")),
 		},
 		{
 			input:  putShoutRequest{Shout: whisperd.Shout{}},
 			status: http.StatusBadRequest,
-			assert: assertErrorResponse(t, *regexp.MustCompile("invalid record")),
+			assert: assertErrorResponse(*regexp.MustCompile("invalid record")),
 		},
 	}
 
-	rt := testHandler()
+	rt := testHandler([]whisperd.Shout{})
 
 	for _, tc := range tests {
 		data, err := json.Marshal(tc.input)
@@ -138,8 +182,14 @@ func TestPostShout(t *testing.T) {
 
 		rt.ServeHTTP(rec, req)
 
-		assertStatus(t, rec, tc.status)
-		assertContentType(t, rec, contentType)
-		tc.assert(rec)
+		if err := assertStatus(rec, tc.status); err != nil {
+			t.Fatal(err)
+		}
+		if err := assertContentType(rec, contentType); err != nil {
+			t.Fatal(err)
+		}
+		if err := tc.assert(rec); err != nil {
+			t.Fatal(err)
+		}
 	}
 }

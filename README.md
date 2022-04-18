@@ -1,6 +1,6 @@
 # Whisperd
 
-Single binary whisper application server. Pet project mostly used to practice Go and example app for DevOps and CloudOps learning.
+Single binary whisper application server. Pet project mostly used to practise Go and example app for DevOps and CloudOps learning.
 
 Quick reference:
 

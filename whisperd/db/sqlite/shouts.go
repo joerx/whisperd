@@ -3,6 +3,7 @@ package sqlite
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"time"
 
 	"whisperd.io/whisperd/whisperd"
@@ -56,8 +57,29 @@ func (ss *sqliteStore) GetAll(ctx context.Context) ([]whisperd.Shout, error) {
 	return sl, nil
 }
 
-func (ss *sqliteStore) Get(ctx context.Context, id string) (whisperd.Shout, error) {
-	return whisperd.Shout{}, nil
+func (ss *sqliteStore) Get(ctx context.Context, id int64) (whisperd.Shout, error) {
+	var (
+		fid        int64
+		fmessage   string
+		ftimestamp string
+	)
+
+	query := "SELECT id, message, timestamp FROM shouts WHERE id = ?"
+	if err := ss.db.QueryRowContext(ctx, query, id).Scan(&fid, &fmessage, &ftimestamp); err != nil {
+		switch err {
+		case sql.ErrNoRows:
+			return whisperd.Shout{}, db.ErrorNotFound
+		default:
+			return whisperd.Shout{}, err
+		}
+	}
+
+	ts, err := time.Parse(isoFormat, ftimestamp)
+	if err != nil {
+		return whisperd.Shout{}, fmt.Errorf("failed to parse '%s' as time using format '%s'", ftimestamp, isoFormat)
+	}
+
+	return whisperd.Shout{ID: id, Message: fmessage, Timestamp: ts}, nil
 }
 
 func (ss *sqliteStore) Insert(ctx context.Context, s whisperd.Shout) (whisperd.Shout, error) {

@@ -56,7 +56,11 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	go s.ListenAndServe()
+	go func() {
+		if err := s.ListenAndServe(); err != nil {
+			log.Fatal(err)
+		}
+	}()
 
 	log.Printf("Server listening on address %s", s.Addr)
 	<-waitChan

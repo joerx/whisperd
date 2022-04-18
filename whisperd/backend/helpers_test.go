@@ -2,54 +2,58 @@ package backend
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http/httptest"
 	"regexp"
-	"testing"
 	"time"
 )
 
-func assertStatus(t *testing.T, rec *httptest.ResponseRecorder, expected int) {
+func assertStatus(rec *httptest.ResponseRecorder, expected int) error {
 	if rec.Result().StatusCode != expected {
-		t.Fatalf("Expected status code %v but got %v", expected, rec.Result().StatusCode)
+		return fmt.Errorf("Expected status code %v but got %v", expected, rec.Result().StatusCode)
 	}
+	return nil
 }
 
-func assertContentType(t *testing.T, rec *httptest.ResponseRecorder, expected string) {
+func assertContentType(rec *httptest.ResponseRecorder, expected string) error {
 	ct := rec.Result().Header.Get("Content-type")
 	if ct != expected {
-		t.Fatalf("Expected content type to be '%v' but got '%v'", expected, ct)
+		return fmt.Errorf("Expected content type to be '%v' but got '%v'", expected, ct)
 	}
+	return nil
 }
 
-func assertValidResponse(t *testing.T, msgMatch regexp.Regexp) func(rec *httptest.ResponseRecorder) {
-	return func(rec *httptest.ResponseRecorder) {
+func assertValidResponse(msgMatch regexp.Regexp) func(rec *httptest.ResponseRecorder) error {
+	return func(rec *httptest.ResponseRecorder) error {
 		var s shoutResponse
 		if err := json.Unmarshal(rec.Body.Bytes(), &s); err != nil {
-			t.Fatal(err)
+			return err
 		}
 		if s.Shout.ID == 0 {
-			t.Fatalf("Expected response to have non-zero id but got %d", s.Shout.ID)
+			return fmt.Errorf("Expected response to have non-zero id but got %d", s.Shout.ID)
 		}
 		if !msgMatch.Match([]byte(s.Shout.Message)) {
-			t.Fatalf("Expected response message to match '%s' but was '%s'", msgMatch.String(), s.Shout.Message)
+			return fmt.Errorf("Expected response message to match '%s' but was '%s'", msgMatch.String(), s.Shout.Message)
 		}
 		if (s.Shout.Timestamp == time.Time{}) {
-			t.Fatalf("Expected response timestamp to not be empty but was '%s'", s.Shout.Timestamp)
+			return fmt.Errorf("Expected response timestamp to not be empty but was '%s'", s.Shout.Timestamp)
 		}
 		if s.Shout.Timestamp.After(time.Now()) {
-			t.Fatalf("Expected response timestamp to not be in the future but was '%s'", s.Shout.Timestamp)
+			return fmt.Errorf("Expected response timestamp to not be in the future but was '%s'", s.Shout.Timestamp)
 		}
+		return nil
 	}
 }
 
-func assertErrorResponse(t *testing.T, r regexp.Regexp) func(rec *httptest.ResponseRecorder) {
-	return func(rec *httptest.ResponseRecorder) {
+func assertErrorResponse(r regexp.Regexp) func(rec *httptest.ResponseRecorder) error {
+	return func(rec *httptest.ResponseRecorder) error {
 		var e errorResponse
 		if err := json.Unmarshal(rec.Body.Bytes(), &e); err != nil {
-			t.Fatal(err)
+			return err
 		}
 		if !r.Match([]byte(e.Error)) {
-			t.Fatalf("Expected error message to match '%s' but got '%s'", r.String(), e.Error)
+			return fmt.Errorf("Expected error message to match '%s' but got '%s'", r.String(), e.Error)
 		}
+		return nil
 	}
 }
