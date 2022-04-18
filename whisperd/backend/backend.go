@@ -7,7 +7,7 @@ import (
 	"whisperd.io/whisperd/whisperd/db/provider"
 )
 
-func New(dbOpts db.Opts) (http.Handler, error) {
+func Handler(dbOpts db.Opts) (http.Handler, error) {
 	p, err := provider.New(dbOpts)
 	if err != nil {
 		return nil, err

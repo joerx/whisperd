@@ -10,26 +10,29 @@ import (
 )
 
 type Opts struct {
-	Addr     string
-	Roles    map[string]struct{}
-	Frontend frontend.Opts
-	DB       db.Opts
+	Addr  string
+	Roles map[string]struct{}
+	DB    db.Opts
 }
 
 func New(opts Opts) (*http.Server, error) {
-	be, err := backend.New(opts.DB)
-	if err != nil {
-		return nil, err
-	}
-
-	fe, err := frontend.New(frontend.Opts{})
-	if err != nil {
-		return nil, err
-	}
-
 	r := mux.NewRouter()
-	r.PathPrefix("/api").Handler(be)
-	r.PathPrefix("/").Handler(fe)
+
+	if _, ok := opts.Roles["backend"]; ok {
+		be, err := backend.Handler(opts.DB)
+		if err != nil {
+			return nil, err
+		}
+		r.PathPrefix("/api").Handler(be)
+	}
+
+	if _, ok := opts.Roles["frontend"]; ok {
+		fe, err := frontend.Handler()
+		if err != nil {
+			return nil, err
+		}
+		r.PathPrefix("/").Handler(fe)
+	}
 
 	s := &http.Server{
 		Addr:    opts.Addr,
