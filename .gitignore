@@ -16,3 +16,6 @@
 
 # sqlite.db
 *.db
+
+# output files
+out/
